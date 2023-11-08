@@ -1,0 +1,5 @@
+Uppercase: 12 
+Lowercase: 30 
+Digits: 10 
+Character count: 7 
+File size is 63 bytes
