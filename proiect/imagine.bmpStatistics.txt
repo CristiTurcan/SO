@@ -1,4 +1,4 @@
-Nume fisier: imagine.bmp
+Nume fisier: dir/imagine.bmp
 Inaltime: 1280
 Lungime: 1920
 Dimensiune: 7372938

@@ -1,0 +1,8 @@
+Nume fisier: dir/textfile.txt
+Dimensiune: 10
+Identificatorul utilizatorului: 501
+Timpul ultimei modificari: 17.11.2023
+Contorul de legaturi: 1
+Drepturi de acces user: rw-
+Drepturi de acces grup: r--
+Drepturi de acces altii: r--

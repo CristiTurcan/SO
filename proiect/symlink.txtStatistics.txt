@@ -1,0 +1,6 @@
+Nume legatura: dir/symlink.txt
+Dimensiune legatura: 12
+Dimensiunea fisierului target: 10
+Drepturi de acces user: rwx
+Drepturi de acces grup: r-x
+Drepturi de acces altii: r-x
