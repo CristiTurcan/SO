@@ -1,0 +1,10 @@
+Nume fisier: dir/imagine_2.bmp
+Inaltime: 426
+Lungime: 640
+Dimensiune: 818058
+Identificatorul utilizatorului: 501
+Timpul ultimei modificari: 02.12.2023
+Contorul de legaturi: 1
+Drepturi de acces user: rw-
+Drepturi de acces grup: r--
+Drepturi de acces altii: r--

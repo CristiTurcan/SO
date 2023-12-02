@@ -73,10 +73,19 @@ char* allocateMemory (int n)
     if(value == NULL)
     {
         printf("Couldn't allocate memory correctly\n");
+        free(value);
         exit(EXIT_FAILURE);
     }
 
     return value;
+}
+
+int checkFileExtension(const char *filename, const char *extension)
+{
+    const char *currentExtension = &filename[strlen(filename) - strlen(extension)];
+    if (strcmp(currentExtension, extension) == 0)
+        return 1;
+    return 0;
 }
 
 int fileIsBMP(int fd)
@@ -86,12 +95,14 @@ int fileIsBMP(int fd)
     if (lseek(fd, 0, SEEK_SET) < 0) // cursor always at the start of file
     {
         perror("Error moving file cursor: ");
+        close(fd);
         exit(EXIT_FAILURE);
     }
 
     if (read(fd, buff, 2) < 0)
     {
-        perror("Error reading from file: ");
+        perror("Error reading from file while checking if it's BMP ");
+        close(fd);
         exit(EXIT_FAILURE);
     }
 
@@ -127,7 +138,6 @@ int getFileType(const char *filename)
 
 void getImageHeightWidth(int file_descriptor, int *height, int *width)
 {
-
     if (lseek(file_descriptor, 18, SEEK_SET) < 0)
     {
         perror("Error moving file cursor: ");
@@ -137,6 +147,7 @@ void getImageHeightWidth(int file_descriptor, int *height, int *width)
     if (read(file_descriptor, width, 4) < 0)
     {
         perror("Error reading from file: ");
+        close(file_descriptor);
         exit(EXIT_FAILURE);
     }
 
@@ -149,6 +160,7 @@ void getImageHeightWidth(int file_descriptor, int *height, int *width)
     if (read(file_descriptor, height, 4) < 0)
     {
         perror("Error reading from file: ");
+        close(file_descriptor);
         exit(EXIT_FAILURE);
     }
 }
@@ -379,6 +391,7 @@ int lineCount(const char *filename)
         if (readValue == -1)
         {
             printf("Error occured while reading file %s\n", filename);
+            close(fd);
             exit(EXIT_FAILURE);
         }
 
@@ -426,6 +439,65 @@ void waitAllChildProcess()
     }
 }
 
+void getImagePixelData(const char *filename)
+{   
+    int fd = openFile(filename, O_RDONLY);
+    int height = 0, width= 0;
+    getImageHeightWidth(fd, &height, &width);
+    int size = height * width * 3;
+
+    unsigned char* colorTable = (unsigned char*)malloc(size);
+    if(colorTable == NULL)
+    {
+        printf("Couldn't allocate memory for BMP pixel data\n");
+        free(colorTable);
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+    
+    while((read(fd, colorTable, size)) < 0)
+    {
+        perror("Could not read pixel data\n");
+        free(colorTable);
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    for(int i = 0; i < size; i += 3)
+    {
+        unsigned char blue = colorTable[i];
+        unsigned char green = colorTable[i + 1];
+        unsigned char red = colorTable[i + 2];
+
+        unsigned char greyscale = (unsigned char)(0.299 * red + 0.587 * green + 0.114 * blue);
+        
+        colorTable[i] = greyscale;
+        colorTable[i + 1] = greyscale;
+        colorTable[i + 2] = greyscale;
+    }
+
+    close(fd);
+    fd = openFile(filename, O_WRONLY);
+
+    if (lseek(fd, 54, SEEK_SET) < 0)
+    {
+        perror("Error moving file cursor: ");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    if (write(fd, colorTable, size) < 0)
+    {
+        perror("Error writing BMP image data\n");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+
+    free(colorTable);
+    close(fd);
+}
+
 int main(int argc, char *argv[])
 {
     struct dirent *pDirent;
@@ -451,23 +523,29 @@ int main(int argc, char *argv[])
         {
         case 1: // regFile
         {
-            int fileDescriptor = openFile(path, O_RDONLY);
             if ((pid = newProcess()) == 0)
             {
+                int fileDescriptor = openFile(path, O_RDONLY);  
                 getFileStats(path, &md, fileDescriptor);
                 char *statistics = createMetadata(&md, fileDescriptor);
                 createStatisticFile(statisticsFileName, statistics);
                 free(statistics);
+                close(fileDescriptor);
                 lines = lineCount(statisticsFileName);
                 exit(lines);
             }
-            if(fileIsBMP(fileDescriptor))
-                if((pid = newProcess()) == 0)
-                {
-                    printf("E BMPPP\n");
-                    exit(0);
-                }
-            close(fileDescriptor);
+            if(checkFileExtension(path, ".bmp"))
+            {
+                int fileDescriptor = openFile(path, O_RDONLY);  
+                if(fileIsBMP(fileDescriptor))
+                    if((pid = newProcess()) == 0)
+                    {
+                        // printf("%s\n", path);
+                        getImagePixelData(path);
+                        exit(0);
+                    }
+                close(fileDescriptor);
+            }
         }
         break;
         case 2: // directory
