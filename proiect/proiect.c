@@ -431,9 +431,12 @@ void waitAllChildProcess()
 
         if (WIFEXITED(wstatus))
         {   
-            char *number = intToChar(WEXITSTATUS(wstatus));
-            createStatisticFile("statistics.txt", number);
-            free(number);
+            if(WEXITSTATUS(wstatus) != 0)
+            {
+                char *number = intToChar(WEXITSTATUS(wstatus));
+                createStatisticFile("statistics.txt", number);
+                free(number);
+            }
             printf("exited pid=%d, status=%d\n", w, WEXITSTATUS(wstatus));
         }
     }
@@ -450,6 +453,15 @@ void getImagePixelData(const char *filename)
     if(colorTable == NULL)
     {
         printf("Couldn't allocate memory for BMP pixel data\n");
+        free(colorTable);
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+
+    // 54 - sizeof header
+    if (lseek(fd, 54, SEEK_SET) < 0)
+    {
+        perror("Error moving file cursor: ");
         free(colorTable);
         close(fd);
         exit(EXIT_FAILURE);
@@ -478,21 +490,23 @@ void getImagePixelData(const char *filename)
 
     close(fd);
     fd = openFile(filename, O_WRONLY);
-
+    
+    // 54 - sizeof header
     if (lseek(fd, 54, SEEK_SET) < 0)
     {
         perror("Error moving file cursor: ");
+        free(colorTable);
         close(fd);
         exit(EXIT_FAILURE);
     }
 
-    if (write(fd, colorTable, size) < 0)
+    if (write(fd, colorTable, size) != size)
     {
         perror("Error writing BMP image data\n");
+        free(colorTable);
         close(fd);
         exit(EXIT_FAILURE);
     }
-
 
     free(colorTable);
     close(fd);
@@ -540,7 +554,6 @@ int main(int argc, char *argv[])
                 if(fileIsBMP(fileDescriptor))
                     if((pid = newProcess()) == 0)
                     {
-                        // printf("%s\n", path);
                         getImagePixelData(path);
                         exit(0);
                     }
