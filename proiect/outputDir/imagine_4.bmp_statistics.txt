@@ -3,7 +3,7 @@ Inaltime: 1309
 Lungime: 762
 Dimensiune: 2995046
 Identificatorul utilizatorului: 501
-Timpul ultimei modificari: 04.12.2023
+Timpul ultimei modificari: 09.12.2023
 Contorul de legaturi: 1
 Drepturi de acces user: rw-
 Drepturi de acces grup: r--

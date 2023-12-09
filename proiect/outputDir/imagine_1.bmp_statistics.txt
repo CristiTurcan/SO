@@ -1,9 +1,9 @@
 Nume fisier: dir/imagine_1.bmp
 Inaltime: 467
 Lungime: 467
-Dimensiune: 654321
+Dimensiune: 219634
 Identificatorul utilizatorului: 501
-Timpul ultimei modificari: 04.12.2023
+Timpul ultimei modificari: 09.12.2023
 Contorul de legaturi: 1
 Drepturi de acces user: rw-
 Drepturi de acces grup: r--

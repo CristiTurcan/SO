@@ -13,7 +13,7 @@
 #define BUFFER_SIZE 4096
 
 typedef struct metadata_t
-{ 
+{
     char file_name[40];
     int height;
     int width;
@@ -29,14 +29,14 @@ typedef struct metadata_t
 
 void checkArguments(int number)
 {
-    if (number > 3)
+    if (number > 4)
     {
         perror("Too many arguments \n");
         exit(-1);
     }
-    else if (number < 3)
+    else if (number < 4)
     {
-        perror("One argument expected \n");
+        perror("Three argument expected \n");
         exit(EXIT_FAILURE);
     }
 }
@@ -67,10 +67,10 @@ DIR *openDirectory(const char *dirname)
     return inputDir;
 }
 
-char* allocateMemory (int n)
+char *allocateMemory(int n)
 {
-    char *value = (char*)malloc(n * sizeof(char));
-    if(value == NULL)
+    char *value = (char *)malloc(n * sizeof(char));
+    if (value == NULL)
     {
         printf("Couldn't allocate memory correctly\n");
         free(value);
@@ -130,9 +130,6 @@ int getFileType(const char *filename)
     if (S_ISLNK(file_status.st_mode))
         return 3;
 
-    // nu cred ca am nevoie de astea, cel putin sa faca exit, mai vad pe viitor
-    // perror("File is not dir/symlink/regfile\n");
-    // exit(EXIT_FAILURE);
     return 0;
 }
 
@@ -407,7 +404,7 @@ int lineCount(const char *filename)
     return lines;
 }
 
-char* intToChar (int number)
+char *intToChar(int number)
 {
     char *str = allocateMemory(5);
     sprintf(str, "%d\n", number);
@@ -418,8 +415,8 @@ void waitAllChildProcess()
 {
     int w = 0;
     int wstatus = 0;
-    
-    while((w = wait(&wstatus)) > 0)
+
+    while ((w = wait(&wstatus)) > 0)
     {
         // cazul w == -1 nu o sa se intample niciodata
         if (w == -1)
@@ -428,29 +425,28 @@ void waitAllChildProcess()
             exit(EXIT_FAILURE);
         }
 
-
         if (WIFEXITED(wstatus))
-        {   
-            if(WEXITSTATUS(wstatus) != 0)
+        {
+            if (WEXITSTATUS(wstatus) != 0)
             {
                 char *number = intToChar(WEXITSTATUS(wstatus));
                 createStatisticFile("statistics.txt", number);
                 free(number);
             }
-            printf("exited pid=%d, status=%d\n", w, WEXITSTATUS(wstatus));
+            printf("S-a incheiat procesul cu pid-ul %d si codul %d\n", w, WEXITSTATUS(wstatus));
         }
     }
 }
 
-void getImagePixelData(const char *filename)
-{   
+void convertToGreyscale(const char *filename)
+{
     int fd = openFile(filename, O_RDONLY);
-    int height = 0, width= 0;
+    int height = 0, width = 0;
     getImageHeightWidth(fd, &height, &width);
     int size = height * width * 3;
 
-    unsigned char* colorTable = (unsigned char*)malloc(size);
-    if(colorTable == NULL)
+    unsigned char *colorTable = (unsigned char *)malloc(size);
+    if (colorTable == NULL)
     {
         printf("Couldn't allocate memory for BMP pixel data\n");
         free(colorTable);
@@ -466,8 +462,8 @@ void getImagePixelData(const char *filename)
         close(fd);
         exit(EXIT_FAILURE);
     }
-    
-    while((read(fd, colorTable, size)) < 0)
+
+    if ((read(fd, colorTable, size)) < 0)
     {
         perror("Could not read pixel data\n");
         free(colorTable);
@@ -475,14 +471,14 @@ void getImagePixelData(const char *filename)
         exit(EXIT_FAILURE);
     }
 
-    for(int i = 0; i < size; i += 3)
+    for (int i = 0; i < size; i += 3)
     {
         unsigned char blue = colorTable[i];
         unsigned char green = colorTable[i + 1];
         unsigned char red = colorTable[i + 2];
 
         unsigned char greyscale = (unsigned char)(0.299 * red + 0.587 * green + 0.114 * blue);
-        
+
         colorTable[i] = greyscale;
         colorTable[i + 1] = greyscale;
         colorTable[i + 2] = greyscale;
@@ -490,7 +486,7 @@ void getImagePixelData(const char *filename)
 
     close(fd);
     fd = openFile(filename, O_WRONLY);
-    
+
     // 54 - sizeof header
     if (lseek(fd, 54, SEEK_SET) < 0)
     {
@@ -512,6 +508,24 @@ void getImagePixelData(const char *filename)
     close(fd);
 }
 
+int closeFileDescriptor(int fd)
+{
+    int closeValue = 0;
+    if ((closeValue = close(fd)) == -1)
+    {
+        perror("Error closing fileDescriptor\n");
+        exit(EXIT_FAILURE);
+    }
+    return closeValue;
+}
+
+int getScriptOutput(int *pfd)
+{
+    char buff[BUFFER_SIZE];
+    while ((read(pfd[0], buff, BUFFER_SIZE)) > 0);
+    return atoi(buff);
+}
+
 int main(int argc, char *argv[])
 {
     struct dirent *pDirent;
@@ -519,6 +533,8 @@ int main(int argc, char *argv[])
     DIR *inputDir;
     int pid = 0;
     int lines = 0;
+    int totalCharCounter = 0;
+    int pfd[2], p2fd[2], p3fd[2];
 
     checkArguments(argc);
     inputDir = openDirectory(argv[1]);
@@ -537,28 +553,113 @@ int main(int argc, char *argv[])
         {
         case 1: // regFile
         {
+            if ((pipe(pfd) == -1) || (pipe(p2fd) == -1) || (pipe(p3fd) == -1))
+            {
+                perror("Error opening pipe\n");
+                exit(EXIT_FAILURE);
+            }
+
             if ((pid = newProcess()) == 0)
             {
-                int fileDescriptor = openFile(path, O_RDONLY);  
+                int fileDescriptor = openFile(path, O_RDONLY);
                 getFileStats(path, &md, fileDescriptor);
                 char *statistics = createMetadata(&md, fileDescriptor);
                 createStatisticFile(statisticsFileName, statistics);
                 free(statistics);
-                close(fileDescriptor);
+                
+                //send line count to pipe 3
                 lines = lineCount(statisticsFileName);
-                exit(lines);
-            }
-            if(checkFileExtension(path, ".bmp"))
-            {
-                int fileDescriptor = openFile(path, O_RDONLY);  
-                if(fileIsBMP(fileDescriptor))
-                    if((pid = newProcess()) == 0)
+                char lineCount[10];
+                sprintf(lineCount, "%d\n", lines);
+                // close reading end pipe2
+                closeFileDescriptor(p3fd[0]);
+                if((write(p3fd[1], lineCount, (strlen(lineCount) + 1))) != (strlen(lineCount) + 1))
+                {
+                    perror("Error writing line count\n");
+                    exit(EXIT_FAILURE);
+                }
+                closeFileDescriptor(p3fd[1]);
+
+                if (!fileIsBMP(fileDescriptor))
+                {
+                    // close reading end of pipe
+                    closeFileDescriptor(pfd[0]);
+
+                    //write "cat" command output intro pipe 1
+                    if((dup2(pfd[1], STDOUT_FILENO)) < 0)
                     {
-                        getImagePixelData(path);
+                        perror("Error dup pipe to stdout\n");
+                        close(pfd[1]);
+                        exit(EXIT_FAILURE);
+                    }
+                    // close writing end of pipe
+                    closeFileDescriptor(pfd[1]);
+                    close(fileDescriptor);
+
+                    execlp("cat", "cat", path, NULL);
+                    printf("Exec for cat file didn't work\n");
+                    exit(EXIT_FAILURE);
+                }
+
+                close(fileDescriptor);
+                exit(0);
+            }
+            if (checkFileExtension(path, ".bmp"))
+            {
+                int fileDescriptor = openFile(path, O_RDONLY);
+                if (fileIsBMP(fileDescriptor))
+                    if ((pid = newProcess()) == 0)
+                    {
+                        convertToGreyscale(path);
                         exit(0);
                     }
                 close(fileDescriptor);
             }
+            else
+            {
+                if ((pid = newProcess()) == 0)
+                {
+                    // close writing end of pipe
+                    closeFileDescriptor(pfd[1]);
+
+                    // redirect pipe to stdin
+                    if ((dup2(pfd[0], STDIN_FILENO)) < 0)
+                    {
+                        perror("Error redirecting pipe to stdin\n");
+                        close(pfd[0]);
+                        exit(EXIT_FAILURE);
+                    }
+
+                    closeFileDescriptor(pfd[0]);
+                    closeFileDescriptor(p2fd[0]);
+
+                    // redirect stdout to writing end of pipe2
+                    if ((dup2(p2fd[1], STDOUT_FILENO)) < 0)
+                    {
+                        perror("Error redirecting pipe to stdin\n");
+                        close(pfd[1]);
+                        exit(EXIT_FAILURE);
+                    }
+
+                    execlp("/bin/sh", "/bin/sh", "./charCounter.sh", argv[3], NULL);
+                    printf("Script did not run\n");
+                    exit(0);
+                }
+            }
+            close(pfd[1]);
+            close(pfd[0]);
+
+            //write line count in statistics file
+            close(p3fd[1]);
+            char anotherBuff[10];
+            while((read(p3fd[0], anotherBuff, sizeof(anotherBuff))) > 0);
+            createStatisticFile("statistics.txt", anotherBuff);
+            close(p3fd[0]);
+
+            close(p2fd[1]);
+            int charCounter = getScriptOutput(p2fd);
+            totalCharCounter += charCounter;
+            close(p2fd[0]);
         }
         break;
         case 2: // directory
@@ -590,12 +691,12 @@ int main(int argc, char *argv[])
         default:
             break;
         }
-
         free(statisticsFileName);
         free(path);
     }
 
     waitAllChildProcess();
+    printf("Au fost identificate in total %d propozitii corecte care contin caracterul %s\n", totalCharCounter, argv[3]);
     closedir(inputDir);
     return 0;
 }
