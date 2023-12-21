@@ -1,0 +1,4 @@
+fis1.txt      19
+fis2.txt       6
+fis3.txt      18
+Total:       43
