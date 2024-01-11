@@ -1,0 +1,7 @@
+a occurs 4 times.
+c occurs 1 times.
+g occurs 1 times.
+i occurs 1 times.
+n occurs 1 times.
+u occurs 1 times.
+z occurs 1 times.
